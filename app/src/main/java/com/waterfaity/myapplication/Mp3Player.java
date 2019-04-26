@@ -114,6 +114,9 @@ public class Mp3Player {
         });
     }
 
+    /**
+     * 设置播放速度
+     */
     private void setSpeed() {
         if (mediaState == PREPARED || mediaState == PLAYED) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {

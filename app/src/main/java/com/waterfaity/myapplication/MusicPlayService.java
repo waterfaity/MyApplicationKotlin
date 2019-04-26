@@ -19,6 +19,9 @@ import java.util.ArrayList;
 public class MusicPlayService extends Service {
 
     MyBinder myBinder;
+
+
+    //    - - - - - - - - - - -  服务 - - - - - - - - - - -
     public static final String ACTION_PLAY = "music_play";//播放
     public static final String ACTION_PLAY_OR_PAUSE = "music_play_or_pause";//播放或暂停
     public static final String ACTION_PLAY_SEEK = "music_play_seek";//seek
@@ -31,19 +34,31 @@ public class MusicPlayService extends Service {
     public static final String ACTION_PLAY_SPEED = "music_play_speed";//倍速
     public static final String ACTION_SEND_BROADCAST = "music_send_broadcast";//发送广播
 
+    public static final String EXTRA_DATA = "data";
+    public static final String EXTRA_DATA_2 = "data2";
+    //    - - - - - - - - - - -  服务 - - - - - - - - - - -
+
+    //    - - - - - - - - - - -  广播 - - - - - - - - - - -
     public static final String ACTION_BROADCAST_PLAY_PROGRESS = "MusicPlayService_play_progress";
     public static final String ACTION_BROADCAST_PLAY_STATE = "MusicPlayService_play_state";
     public static final String ACTION_BROADCAST_PLAY_ERROR = "MusicPlayService_play_error";
     public static final String ACTION_BROADCAST_PLAY_NEXT = "MusicPlayService_play_next";
     public static final String ACTION_BROADCAST_PLAY_PRE = "MusicPlayService_play_pre";
 
-    public static final String EXTRA_DATA = "data";
-    public static final String EXTRA_DATA_2 = "data2";
+    public static final String EXTRA_STATE_CODE = "state_code";
+    public static final String EXTRA_ERR_MSG = "err_msg";
+    public static final String EXTRA_TOTAL_LEN = "total_len";
+    public static final String EXTRA_CURRENT_LEN = "current_len";
+    public static final String EXTRA_CURRENT_POS = "current_pos";
+    public static final String EXTRA_CURRENT_MUSIC_BEAN = "current_music_bean";
+    //    - - - - - - - - - - -  广播 - - - - - - - - - - -
 
+    //    - - - - - - - - - - -  播放方式 - - - - - - - - - - -
     public static final int PLAY_TYPE_PLAY_SINGLE = 1;
     public static final int PLAY_TYPE_PLAY_ALL = 2;
     public static final int PLAY_TYPE_LOOP_SINGLE = 3;
     public static final int PLAY_TYPE_LOOP_ALL = 4;
+    //    - - - - - - - - - - -  播放方式 - - - - - - - - - - -
 
 
     @Override
@@ -112,12 +127,40 @@ public class MusicPlayService extends Service {
         private Mp3Player mp3Player;
         private boolean sendBroadcast;
 
-        public OnPlayListener getOnPlayListener() {
-            return onPlayListener;
+        /**
+         * 获取播放列表
+         *
+         * @return
+         */
+        public ArrayList<MusicBean> getPlayList() {
+            return playList;
         }
 
-        public void setOnPlayListener(OnPlayListener onPlayListener) {
-            this.onPlayListener = onPlayListener;
+        /**
+         * 当前位置
+         *
+         * @return
+         */
+        public int getCurrentPos() {
+            return currentPos;
+        }
+
+        /**
+         * 当前播放bean
+         *
+         * @return
+         */
+        public MusicBean getCurrentMusicBean() {
+            return currentMusicBean;
+        }
+
+        /**
+         * 播放器
+         *
+         * @return
+         */
+        public Mp3Player getMp3Player() {
+            return mp3Player;
         }
 
         public void play(MusicBean bean) {
@@ -141,7 +184,8 @@ public class MusicPlayService extends Service {
                     public void onMp3PlayError(int state, String message) {
                         if (sendBroadcast) {
                             Intent intent = new Intent(ACTION_BROADCAST_PLAY_ERROR);
-                            intent.putExtra(EXTRA_DATA, state);
+                            intent.putExtra(EXTRA_STATE_CODE, state);
+                            intent.putExtra(EXTRA_ERR_MSG, message);
                             sendBroadcast(intent);
                         }
                         if (onMp3PlayListener != null)
@@ -152,7 +196,7 @@ public class MusicPlayService extends Service {
                     public void onPlayStateChanged(int state, String message) {
                         if (sendBroadcast) {
                             Intent intent = new Intent(ACTION_BROADCAST_PLAY_STATE);
-                            intent.putExtra(EXTRA_DATA, state);
+                            intent.putExtra(EXTRA_STATE_CODE, state);
                             sendBroadcast(intent);
                         }
                         if (onMp3PlayListener != null)
@@ -167,8 +211,8 @@ public class MusicPlayService extends Service {
                     public void OnPlaying(int current, int total) {
                         if (sendBroadcast) {
                             Intent intent = new Intent(ACTION_BROADCAST_PLAY_PROGRESS);
-                            intent.putExtra(EXTRA_DATA, total);
-                            intent.putExtra(EXTRA_DATA_2, current);
+                            intent.putExtra(EXTRA_TOTAL_LEN, total);
+                            intent.putExtra(EXTRA_CURRENT_LEN, current);
                             sendBroadcast(intent);
                         }
                         if (onMp3PlayListener != null)
@@ -212,13 +256,6 @@ public class MusicPlayService extends Service {
             else {
                 currentPos = playList.indexOf(currentMusicBean);
             }
-
-
-//                if (TextUtils.equals(playList.get(i).getMp3UrlOrPath(), this.currentMusicBean.getMp3UrlOrPath())) {
-//                    currentPos = i;
-//                    return;
-//                }
-//            }
         }
 
         public void playOrPause() {
@@ -238,8 +275,8 @@ public class MusicPlayService extends Service {
                         onPlayListener.onPlayPre(currentPos - 1, playList.get(currentPos - 1), currentPos - 1 > 0);
                     if (sendBroadcast) {
                         Intent intent = new Intent(ACTION_BROADCAST_PLAY_PRE);
-                        intent.putExtra(EXTRA_DATA, currentPos - 1);
-                        intent.putExtra(EXTRA_DATA_2, playList.get(currentPos - 1));
+                        intent.putExtra(EXTRA_CURRENT_POS, currentPos - 1);
+                        intent.putExtra(EXTRA_CURRENT_MUSIC_BEAN, playList.get(currentPos - 1));
                         sendBroadcast(intent);
                     }
                     play(playList.get(currentPos - 1));
@@ -257,8 +294,8 @@ public class MusicPlayService extends Service {
                         onPlayListener.onPlayNext(currentPos + 1, playList.get(currentPos + 1), currentPos + 1 < playList.size() - 1);
                     if (sendBroadcast) {
                         Intent intent = new Intent(ACTION_BROADCAST_PLAY_NEXT);
-                        intent.putExtra(EXTRA_DATA, currentPos + 1);
-                        intent.putExtra(EXTRA_DATA_2, playList.get(currentPos + 1));
+                        intent.putExtra(EXTRA_CURRENT_POS, currentPos + 1);
+                        intent.putExtra(EXTRA_CURRENT_MUSIC_BEAN, playList.get(currentPos + 1));
                         sendBroadcast(intent);
                     }
                     play(playList.get(currentPos + 1));
@@ -285,20 +322,49 @@ public class MusicPlayService extends Service {
             this.playType = playType;
         }
 
+        /**
+         * 播放方式
+         *
+         * @return
+         */
         public int getPlayType() {
             return playType;
         }
 
+        /**
+         * 设置播放速度
+         *
+         * @param playSpeed
+         */
         public void setPlaySpeed(float playSpeed) {
             mp3Player.setPlaySpeed(playSpeed);
         }
 
+        /**
+         * seek
+         *
+         * @param seek
+         */
         public void seekTo(int seek) {
             if (seek > 0) {
                 mp3Player.seekTo(seek);
             }
         }
 
+        /**
+         * 播放监听 上/下曲
+         *
+         * @param onPlayListener
+         */
+        public void setOnPlayListener(OnPlayListener onPlayListener) {
+            this.onPlayListener = onPlayListener;
+        }
+
+        /**
+         * 播放监听状态 暂停/播放/完成/停止/播放中/错误
+         *
+         * @param onMp3PlayListener
+         */
         public void setOnMp3PlayListener(Mp3Player.onMp3PlayListener onMp3PlayListener) {
             this.onMp3PlayListener = onMp3PlayListener;
         }
@@ -308,6 +374,12 @@ public class MusicPlayService extends Service {
         }
     }
 
+    /**
+     * 设置播放列表
+     *
+     * @param context
+     * @param playList
+     */
     public static void setPlayList(Context context, ArrayList<MusicBean> playList) {
         Intent intent = new Intent(context, MusicPlayService.class);
         intent.setAction(ACTION_PLAY_LIST);
@@ -325,6 +397,13 @@ public class MusicPlayService extends Service {
         play(context, musicBean, -1);
     }
 
+    /**
+     * 播放
+     *
+     * @param context
+     * @param musicBean
+     * @param seek
+     */
     public static void play(Context context, MusicBean musicBean, int seek) {
         Intent intent = new Intent(context, MusicPlayService.class);
         intent.setAction(ACTION_PLAY);
@@ -370,7 +449,7 @@ public class MusicPlayService extends Service {
     }
 
     /**
-     * seek
+     * 发送广播开关
      *
      * @param context
      * @param sendBroadcast
@@ -409,7 +488,6 @@ public class MusicPlayService extends Service {
         execute(context, ACTION_STOP);
     }
 
-
     /**
      * 释放
      *
@@ -425,15 +503,24 @@ public class MusicPlayService extends Service {
         context.startService(intent);
     }
 
-
-    private void sendBroadcast(String action, Intent intent) {
-
-    }
-
     public interface OnPlayListener {
-        void onPlayNext(int pos, MusicBean musicBean, boolean hasNext);
-
+        /**
+         * 播放上一曲
+         *
+         * @param pos
+         * @param musicBean
+         * @param hasPre
+         */
         void onPlayPre(int pos, MusicBean musicBean, boolean hasPre);
+
+        /**
+         * 播放下一曲
+         *
+         * @param pos
+         * @param musicBean
+         * @param hasNext
+         */
+        void onPlayNext(int pos, MusicBean musicBean, boolean hasNext);
     }
 
     public interface MusicBean extends Serializable {

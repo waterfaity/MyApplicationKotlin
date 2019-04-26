@@ -50,7 +50,7 @@ class MainActivity : AppCompatActivity(), Adapter.OnItemClickListener, AudioSeek
             dataList.add(i.toString())
         }
         mRecyclerView?.layoutManager = LinearLayoutManager(this)
-        mRecyclerView?.adapter = Adapter(this, dataList).setOnClickListener(this)
+//        mRecyclerView?.adapter = Adapter(this, dataList).setOnClickListener(this)
 
 //        MusicPlayService.play(this, "/sdcard/test/audio/jjj.mp3")
         var intent: Intent = Intent(this, Class.forName("com.waterfaity.myapplication.MusicPlayService"))
@@ -65,7 +65,7 @@ class MainActivity : AppCompatActivity(), Adapter.OnItemClickListener, AudioSeek
 //                Log.i("log", "----")
 //                play();
                 var binder: MusicPlayService.MyBinder = service as MusicPlayService.MyBinder
-                binder.play("/sdcard/test/audio/jjj.mp3", 10000)
+                binder.play(PlayBean("/sdcard/test/audio/jjj.mp3"), 10000)
                 binder.setOnMp3PlayListener(object : Mp3Player.onMp3PlayListener {
                     override fun OnPlaying(current: Int, total: Int) {
                         seekBar?.setTotal(total.toLong())
@@ -98,16 +98,22 @@ class MainActivity : AppCompatActivity(), Adapter.OnItemClickListener, AudioSeek
     }
 
     fun pre(view: View) {
-
+        MusicPlayService.playPre(this)
     }
 
     fun next(view: View) {
+        MusicPlayService.playNext(this)
     }
 
     fun double2(view: View) {
         MusicPlayService.setSpeed(this, Random().nextFloat() * 3)
+    }
 
-
+    var num: Int = 0
+    fun type(view: View) {
+     num++
+        MusicPlayService.setPlayType(this, num%4)
+        Log.i("log", (num%4).toString())
     }
 
     fun playList(view: View) {
@@ -123,11 +129,14 @@ class MainActivity : AppCompatActivity(), Adapter.OnItemClickListener, AudioSeek
         if (requestCode == 1001 && resultCode == Activity.RESULT_OK) {
             var selectFileList = data?.getSerializableExtra(SelectFileActivity.RESULT_DATA) as ArrayList<File>
 
-            var dataList = arrayListOf<String>()
+            var dataList = arrayListOf<MusicPlayService.MusicBean>()
             for (file in selectFileList) {
-                dataList.add(file.absolutePath)
+                dataList.add(PlayBean(file.absolutePath))
             }
             mRecyclerView?.adapter = Adapter(this, dataList).setOnClickListener(this)
+
+
+
             MusicPlayService.setPlayList(this, dataList)
         }
     }

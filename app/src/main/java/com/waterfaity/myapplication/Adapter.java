@@ -14,14 +14,14 @@ import java.util.ArrayList;
 
 public class Adapter extends RecyclerView.Adapter<Adapter.ViewHolder> {
     private Context context;
-    private ArrayList<String> dataList;
+    private ArrayList<MusicPlayService.MusicBean> dataList;
 
-    public Adapter(Context context, ArrayList<String> dataList) {
+    public Adapter(Context context, ArrayList<MusicPlayService.MusicBean> dataList) {
         this.context = context;
         this.dataList = dataList;
     }
 
-    public ArrayList<String> getDataList() {
+    public ArrayList<MusicPlayService.MusicBean> getDataList() {
         return dataList;
     }
 
@@ -47,7 +47,7 @@ public class Adapter extends RecyclerView.Adapter<Adapter.ViewHolder> {
             }
         });
         TextView textView = viewHolder.itemView.findViewById(R.id.text);
-        textView.setText(dataList.get(i));
+        textView.setText(dataList.get(i).getMp3UrlOrPath());
         textView.setTextColor(Color.BLACK);
     }
 

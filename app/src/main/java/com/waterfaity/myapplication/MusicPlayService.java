@@ -6,8 +6,8 @@ import android.content.Intent;
 import android.os.Binder;
 import android.os.IBinder;
 import android.text.TextUtils;
-import android.util.Log;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 
 /**
@@ -17,6 +17,7 @@ import java.util.ArrayList;
  * @info:
  */
 public class MusicPlayService extends Service {
+
     MyBinder myBinder;
     public static final String ACTION_PLAY = "music_play";//播放
     public static final String ACTION_PLAY_OR_PAUSE = "music_play_or_pause";//播放或暂停
@@ -28,6 +29,13 @@ public class MusicPlayService extends Service {
     public static final String ACTION_PLAY_LIST = "music_play_list";//播放列表
     public static final String ACTION_PLAY_TYPE = "music_play_type";//播放类型
     public static final String ACTION_PLAY_SPEED = "music_play_speed";//倍速
+    public static final String ACTION_SEND_BROADCAST = "music_send_broadcast";//发送广播
+
+    public static final String ACTION_BROADCAST_PLAY_PROGRESS = "MusicPlayService_play_progress";
+    public static final String ACTION_BROADCAST_PLAY_STATE = "MusicPlayService_play_state";
+    public static final String ACTION_BROADCAST_PLAY_ERROR = "MusicPlayService_play_error";
+    public static final String ACTION_BROADCAST_PLAY_NEXT = "MusicPlayService_play_next";
+    public static final String ACTION_BROADCAST_PLAY_PRE = "MusicPlayService_play_pre";
 
     public static final String EXTRA_DATA = "data";
     public static final String EXTRA_DATA_2 = "data2";
@@ -40,7 +48,6 @@ public class MusicPlayService extends Service {
 
     @Override
     public IBinder onBind(Intent intent) {
-        Log.i("log", "----");
         return myBinder = new MyBinder();
     }
 
@@ -51,13 +58,15 @@ public class MusicPlayService extends Service {
             if (action != null && !TextUtils.isEmpty(action)) {
                 switch (action) {
                     case ACTION_PLAY:
-                        myBinder.play(intent.getStringExtra(EXTRA_DATA), intent.getIntExtra(EXTRA_DATA_2, 0));
+                        if (intent.getSerializableExtra(EXTRA_DATA) != null) {
+                            myBinder.play((MusicBean) intent.getSerializableExtra(EXTRA_DATA), intent.getIntExtra(EXTRA_DATA_2, 0));
+                        }
                         break;
                     case ACTION_PLAY_OR_PAUSE:
                         myBinder.playOrPause();
                         break;
                     case ACTION_PLAY_SEEK:
-                        myBinder.playSeek(intent.getIntExtra(EXTRA_DATA, 0));
+                        myBinder.seekTo(intent.getIntExtra(EXTRA_DATA, 0));
                         break;
                     case ACTION_PLAY_PRE:
                         myBinder.playPre();
@@ -72,13 +81,18 @@ public class MusicPlayService extends Service {
                         myBinder.release();
                         break;
                     case ACTION_PLAY_LIST:
-                        myBinder.setPlayList(intent.getStringArrayListExtra(EXTRA_DATA));
+                        if (intent.getSerializableExtra(EXTRA_DATA) != null) {
+                            myBinder.setPlayList((ArrayList<MusicBean>) intent.getSerializableExtra(EXTRA_DATA));
+                        }
                         break;
                     case ACTION_PLAY_TYPE:
                         myBinder.setPlayType(intent.getIntExtra(EXTRA_DATA, PLAY_TYPE_PLAY_SINGLE));
                         break;
                     case ACTION_PLAY_SPEED:
                         myBinder.setPlaySpeed(intent.getFloatExtra(EXTRA_DATA, 1F));
+                        break;
+                    case ACTION_SEND_BROADCAST:
+                        myBinder.setSendBroadcast(intent.getBooleanExtra(EXTRA_DATA, false));
                         break;
                 }
             }
@@ -89,23 +103,34 @@ public class MusicPlayService extends Service {
 
 
     public class MyBinder extends Binder {
+        private OnPlayListener onPlayListener;
         private Mp3Player.onMp3PlayListener onMp3PlayListener;
-        private ArrayList<String> playList;
+        private ArrayList<MusicBean> playList;
         private int currentPos;
-        private String currentUrl;
+        private MusicBean currentMusicBean;
         private int playType;
         private Mp3Player mp3Player;
+        private boolean sendBroadcast;
 
-
-        public void play(String url) {
-            play(url, -1);
+        public OnPlayListener getOnPlayListener() {
+            return onPlayListener;
         }
 
-        public void play(String url, int seek) {
-            this.currentUrl = url;
-            initPos();
-            initPlayer();
-            mp3Player.play(currentUrl, seek);
+        public void setOnPlayListener(OnPlayListener onPlayListener) {
+            this.onPlayListener = onPlayListener;
+        }
+
+        public void play(MusicBean bean) {
+            play(bean, -1);
+        }
+
+        public void play(MusicBean bean, int seek) {
+            if (bean != null) {
+                this.currentMusicBean = bean;
+                initPos();
+                initPlayer();
+                mp3Player.play(currentMusicBean.getMp3UrlOrPath(), seek);
+            }
         }
 
         private void initPlayer() {
@@ -114,18 +139,38 @@ public class MusicPlayService extends Service {
                 mp3Player.setOnMp3PlayListener(new Mp3Player.onMp3PlayListener() {
                     @Override
                     public void onMp3PlayError(int state, String message) {
+                        if (sendBroadcast) {
+                            Intent intent = new Intent(ACTION_BROADCAST_PLAY_ERROR);
+                            intent.putExtra(EXTRA_DATA, state);
+                            sendBroadcast(intent);
+                        }
                         if (onMp3PlayListener != null)
                             onMp3PlayListener.onMp3PlayError(state, message);
                     }
 
                     @Override
                     public void onPlayStateChanged(int state, String message) {
+                        if (sendBroadcast) {
+                            Intent intent = new Intent(ACTION_BROADCAST_PLAY_STATE);
+                            intent.putExtra(EXTRA_DATA, state);
+                            sendBroadcast(intent);
+                        }
                         if (onMp3PlayListener != null)
                             onMp3PlayListener.onPlayStateChanged(state, message);
+
+                        if (state == Mp3Player.COMPLETE) {
+                            onComplete();
+                        }
                     }
 
                     @Override
                     public void OnPlaying(int current, int total) {
+                        if (sendBroadcast) {
+                            Intent intent = new Intent(ACTION_BROADCAST_PLAY_PROGRESS);
+                            intent.putExtra(EXTRA_DATA, total);
+                            intent.putExtra(EXTRA_DATA_2, current);
+                            sendBroadcast(intent);
+                        }
                         if (onMp3PlayListener != null)
                             onMp3PlayListener.OnPlaying(current, total);
                     }
@@ -133,32 +178,95 @@ public class MusicPlayService extends Service {
             }
         }
 
-        /**
-         * 定位当前播放pos
-         */
-        private void initPos() {
-            if (playList == null || TextUtils.isEmpty(this.currentUrl)) currentPos = 0;
-            else for (int i = 0; i < playList.size(); i++) {
-                if (TextUtils.equals(playList.get(i), this.currentUrl)) {
-                    currentPos = i;
-                    return;
+        private void onComplete() {
+            if (playType != 0 && playType != PLAY_TYPE_PLAY_SINGLE) {
+                if (playType == PLAY_TYPE_LOOP_SINGLE) {
+                    //单曲循环
+                    play(currentMusicBean);
+                } else if (playType == PLAY_TYPE_PLAY_ALL) {
+                    //全部播放
+                    playNext();
+                } else if (playType == PLAY_TYPE_LOOP_ALL) {
+                    //循环全部
+                    if (playList != null) {
+                        if (currentPos == playList.size() - 1) {
+                            //最后一首
+                            play(playList.get(0));
+                        } else {
+                            //非最后一首
+                            playNext();
+                        }
+                    } else {
+                        play(currentMusicBean);
+                    }
                 }
             }
         }
 
+        /**
+         * 定位当前播放pos
+         */
+        private void initPos() {
+            if (playList == null || this.currentMusicBean == null)
+                currentPos = 0;
+            else {
+                currentPos = playList.indexOf(currentMusicBean);
+            }
+
+
+//                if (TextUtils.equals(playList.get(i).getMp3UrlOrPath(), this.currentMusicBean.getMp3UrlOrPath())) {
+//                    currentPos = i;
+//                    return;
+//                }
+//            }
+        }
+
         public void playOrPause() {
-            if (mp3Player.getPlayState() == Mp3Player.PAUSE || mp3Player.getPlayState() == Mp3Player.COMPLETE)
-                mp3Player.play(currentUrl);
-            else if (mp3Player.getPlayState() == Mp3Player.PLAYING)
+            if (mp3Player.getPlayState() == Mp3Player.PAUSE || mp3Player.getPlayState() == Mp3Player.COMPLETE) {
+                if (currentMusicBean != null) {
+                    mp3Player.play(currentMusicBean.getMp3UrlOrPath());
+                }
+            } else if (mp3Player.getPlayState() == Mp3Player.PLAYING) {
                 mp3Player.pause();
+            }
         }
 
         public void playPre() {
-
+            if (playList != null && playList.size() > 0) {
+                if (currentPos > 0) {
+                    if (onPlayListener != null)
+                        onPlayListener.onPlayPre(currentPos - 1, playList.get(currentPos - 1), currentPos - 1 > 0);
+                    if (sendBroadcast) {
+                        Intent intent = new Intent(ACTION_BROADCAST_PLAY_PRE);
+                        intent.putExtra(EXTRA_DATA, currentPos - 1);
+                        intent.putExtra(EXTRA_DATA_2, playList.get(currentPos - 1));
+                        sendBroadcast(intent);
+                    }
+                    play(playList.get(currentPos - 1));
+                } else if (playType == PLAY_TYPE_LOOP_ALL || playType == PLAY_TYPE_LOOP_SINGLE) {
+                    //循环 播放最后一个
+                    play(playList.get(playList.size() - 1));
+                }
+            }
         }
 
         public void playNext() {
-
+            if (playList != null && playList.size() > 0) {
+                if (currentPos < playList.size() - 1) {
+                    if (onPlayListener != null)
+                        onPlayListener.onPlayNext(currentPos + 1, playList.get(currentPos + 1), currentPos + 1 < playList.size() - 1);
+                    if (sendBroadcast) {
+                        Intent intent = new Intent(ACTION_BROADCAST_PLAY_NEXT);
+                        intent.putExtra(EXTRA_DATA, currentPos + 1);
+                        intent.putExtra(EXTRA_DATA_2, playList.get(currentPos + 1));
+                        sendBroadcast(intent);
+                    }
+                    play(playList.get(currentPos + 1));
+                } else if (playType == PLAY_TYPE_LOOP_ALL || playType == PLAY_TYPE_LOOP_SINGLE) {
+                    //循环 播放第一个
+                    play(playList.get(0));
+                }
+            }
         }
 
         public void playStop() {
@@ -169,7 +277,7 @@ public class MusicPlayService extends Service {
             mp3Player.release();
         }
 
-        public void setPlayList(ArrayList<String> playList) {
+        public void setPlayList(ArrayList<MusicBean> playList) {
             this.playList = playList;
         }
 
@@ -185,8 +293,7 @@ public class MusicPlayService extends Service {
             mp3Player.setPlaySpeed(playSpeed);
         }
 
-        public void playSeek(int seek) {
-
+        public void seekTo(int seek) {
             if (seek > 0) {
                 mp3Player.seekTo(seek);
             }
@@ -195,9 +302,13 @@ public class MusicPlayService extends Service {
         public void setOnMp3PlayListener(Mp3Player.onMp3PlayListener onMp3PlayListener) {
             this.onMp3PlayListener = onMp3PlayListener;
         }
+
+        public void setSendBroadcast(boolean sendBroadcast) {
+            this.sendBroadcast = sendBroadcast;
+        }
     }
 
-    public static void setPlayList(Context context, ArrayList<String> playList) {
+    public static void setPlayList(Context context, ArrayList<MusicBean> playList) {
         Intent intent = new Intent(context, MusicPlayService.class);
         intent.setAction(ACTION_PLAY_LIST);
         intent.putExtra(EXTRA_DATA, playList);
@@ -208,16 +319,16 @@ public class MusicPlayService extends Service {
      * 播放
      *
      * @param context
-     * @param url
+     * @param musicBean
      */
-    public static void play(Context context, String url) {
-        play(context, url, -1);
+    public static void play(Context context, MusicBean musicBean) {
+        play(context, musicBean, -1);
     }
 
-    public static void play(Context context, String url, int seek) {
+    public static void play(Context context, MusicBean musicBean, int seek) {
         Intent intent = new Intent(context, MusicPlayService.class);
         intent.setAction(ACTION_PLAY);
-        intent.putExtra(EXTRA_DATA, url);
+        intent.putExtra(EXTRA_DATA, musicBean);
         intent.putExtra(EXTRA_DATA_2, seek);
         context.startService(intent);
     }
@@ -226,6 +337,13 @@ public class MusicPlayService extends Service {
         Intent intent = new Intent(context, MusicPlayService.class);
         intent.setAction(ACTION_PLAY_SPEED);
         intent.putExtra(EXTRA_DATA, speed);
+        context.startService(intent);
+    }
+
+    public static void setPlayType(Context context, int playType) {
+        Intent intent = new Intent(context, MusicPlayService.class);
+        intent.setAction(ACTION_PLAY_TYPE);
+        intent.putExtra(EXTRA_DATA, playType);
         context.startService(intent);
     }
 
@@ -248,6 +366,19 @@ public class MusicPlayService extends Service {
         Intent intent = new Intent(context, MusicPlayService.class);
         intent.setAction(ACTION_PLAY_SEEK);
         intent.putExtra(EXTRA_DATA, current);
+        context.startService(intent);
+    }
+
+    /**
+     * seek
+     *
+     * @param context
+     * @param sendBroadcast
+     */
+    public static void setSendBroadcastState(Context context, boolean sendBroadcast) {
+        Intent intent = new Intent(context, MusicPlayService.class);
+        intent.setAction(ACTION_SEND_BROADCAST);
+        intent.putExtra(EXTRA_DATA, sendBroadcast);
         context.startService(intent);
     }
 
@@ -297,5 +428,17 @@ public class MusicPlayService extends Service {
 
     private void sendBroadcast(String action, Intent intent) {
 
+    }
+
+    public interface OnPlayListener {
+        void onPlayNext(int pos, MusicBean musicBean, boolean hasNext);
+
+        void onPlayPre(int pos, MusicBean musicBean, boolean hasPre);
+    }
+
+    public interface MusicBean extends Serializable {
+        long serialVersionUID = 20190426121212999L;
+
+        String getMp3UrlOrPath();
     }
 }

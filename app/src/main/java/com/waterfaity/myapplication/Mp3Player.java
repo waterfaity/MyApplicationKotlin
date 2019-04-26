@@ -7,7 +7,6 @@ import android.os.Message;
 import android.text.TextUtils;
 import android.util.Log;
 
-import java.io.File;
 import java.io.IOException;
 
 /**
@@ -210,8 +209,15 @@ public class Mp3Player {
                 public void handleMessage(Message msg) {
                     super.handleMessage(msg);
                     handle.sendEmptyMessageDelayed(0, 1000);
-                    if (onMp3PlayListener != null && (playState == PLAYING && (mediaState == PREPARED || mediaState == PLAYED)))
-                        onMp3PlayListener.OnPlaying(mediaPlayer.getCurrentPosition(), mediaPlayer.getDuration());
+                    if (onMp3PlayListener != null && (mediaState == PREPARED || mediaState == PLAYED)) {
+                        if (playState == PLAYING) {
+                            //播放中
+                            onMp3PlayListener.OnPlaying(mediaPlayer.getCurrentPosition(), mediaPlayer.getDuration());
+                        } else if (playState == COMPLETE) {
+                            //播放完成 重置
+                            onMp3PlayListener.OnPlaying(0, mediaPlayer.getDuration());
+                        }
+                    }
                 }
             };
         handle.removeMessages(0);
